@@ -4,9 +4,10 @@ Thread.abort_on_exception = true
 
 module Derrick
   class Collector
-    def initialize(redis, queue, context)
+    def initialize(redis, queue, progress, context)
       @redis = redis
       @queue = queue
+      @progress = progress
       @context = context
     end
 
@@ -20,6 +21,7 @@ module Derrick
       loop do
         cursor, keys = @redis.scan(cursor, count: @context.batch_size)
         @queue.push(keys)
+        @progress.increment_collected(keys.size)
         return if cursor == '0'
       end
     end
@@ -29,10 +31,11 @@ module Derrick
 
   class Fetcher
 
-    def initialize(redis, input, output)
+    def initialize(redis, input, output, progress)
       @redis = redis
       @input = input
       @output = output
+      @progress = progress
     end
 
     def run
@@ -54,6 +57,8 @@ module Derrick
           @redis.ttl(key)
         end
       end
+
+      @progress.increment_fetched(keys.size)
 
       keys.map.with_index do |key, index|
         Key.new(key, types[index], ttls[index])
@@ -97,6 +102,28 @@ module Derrick
 
   end
 
+  class Progress
+
+    attr_reader :total, :collected, :fetched
+
+    def initialize(total)
+      @total = total
+      @mutex = Mutex.new
+
+      @collected = 0
+      @fetched = 0
+    end
+
+    def increment_collected(count)
+      @mutex.synchronize { @collected += count }
+    end
+
+    def increment_fetched(count)
+      @mutex.synchronize { @fetched += count }
+    end
+
+  end
+
   class Aggregator
     attr_reader :patterns
     def initialize(queue, context)
@@ -132,19 +159,20 @@ module Derrick
   end
 
   class Inspector
-    attr_reader :redis
+    attr_reader :redis, :progress
 
     def initialize(redis, context)
       @redis = redis
       @context = context
+      @progress = Progress.new(@redis.dbsize)
     end
 
     def report
       keys_queue = Queue.new
       stats_queue = Queue.new
-      Thread.new { Collector.new(@redis, keys_queue, @context).run }
+      Thread.new { Collector.new(@redis, keys_queue, @progress, @context).run }
       @context.concurrency.times do
-        Thread.new { Fetcher.new(@redis, keys_queue, stats_queue).run }
+        Thread.new { Fetcher.new(@redis, keys_queue, stats_queue, @progress).run }
       end
       aggregator = Aggregator.new(stats_queue, @context)
       aggregator.run

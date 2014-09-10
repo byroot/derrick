@@ -5,11 +5,46 @@ require 'byebug'
 
 module Derrick
   class CLI
+    class ProgressDisplay
+
+      def initialize(progress, output)
+        @progress = progress
+        @output = output
+        @last_output_size = 0
+      end
+
+      def render
+        clear
+        message = "collected: #{@progress.collected}/#{@progress.total} fetched: #{@progress.fetched}/#{@progress.total}"
+        @last_output_size = message.size
+        @output.print message
+      end
+
+      def clear
+        @output.print "\b" * @last_output_size
+      end
+
+      def start
+        @thread = Thread.new do
+          loop do
+            render
+            sleep 1
+          end
+        end
+      end
+
+      def stop
+        @thread.kill
+        clear
+      end
+
+    end
+
     class Context
       attr_accessor :concurrency, :batch_size
 
       def initialize
-        @concurrency = 4
+        @concurrency = 2
         @batch_size = 10_000
       end
     end
@@ -73,7 +108,13 @@ module Derrick
 
     def command_inspect(database_url=nil)
       inspector = Derrick::Inspector.new(Redis.new(url: database_url), @context)
+
+      progress_display = ProgressDisplay.new(inspector.progress, STDERR)
+      progress_display.start
+
       aggregate = inspector.report
+      progress_display.stop
+
       AggregateFormatter.new(aggregate).each do |line|
         puts line
       end
