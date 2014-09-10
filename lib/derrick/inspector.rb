@@ -3,24 +3,22 @@ require 'thread'
 Thread.abort_on_exception = true
 
 module Derrick
-  BATCH_SIZE = 10
-  CONCURENCY = 1
-
   class Collector
-    def initialize(redis, queue)
+    def initialize(redis, queue, context)
       @redis = redis
       @queue = queue
+      @context = context
     end
 
     def run
       collect_keys
-      CONCURENCY.times { @queue.push(:stop) }
+      @context.concurrency.times { @queue.push(:stop) }
     end
 
     def collect_keys
       cursor = '0'
       loop do
-        cursor, keys = @redis.scan(cursor, count: BATCH_SIZE)
+        cursor, keys = @redis.scan(cursor, count: @context.batch_size)
         @queue.push(keys)
         return if cursor == '0'
       end
@@ -101,20 +99,22 @@ module Derrick
 
   class Aggregator
     attr_reader :patterns
-    def initialize(queue)
+    def initialize(queue, context)
       @queue = queue
       @patterns = {}
+      @context = context
     end
 
     def run
-      fetcher_count = CONCURENCY
+      fetcher_count = @context.concurrency
       loop do
         keys = @queue.pop
         if keys == :stop
           fetcher_count -= 1
-          break
+          break if fetcher_count == 0
+        else
+          keys.each { |k| aggregate(k) }
         end
-        keys.each { |k| aggregate(k) }
       end
       self
     end
@@ -134,19 +134,19 @@ module Derrick
   class Inspector
     attr_reader :redis
 
-    def initialize(redis)
+    def initialize(redis, context)
       @redis = redis
-      @threads = []
+      @context = context
     end
 
     def report
       keys_queue = Queue.new
       stats_queue = Queue.new
-      @threads << Thread.new { Collector.new(@redis, keys_queue).run }
-      CONCURENCY.times do
-        @threads << Thread.new { Fetcher.new(@redis, keys_queue, stats_queue).run }
+      Thread.new { Collector.new(@redis, keys_queue, @context).run }
+      @context.concurrency.times do
+        Thread.new { Fetcher.new(@redis, keys_queue, stats_queue).run }
       end
-      aggregator = Aggregator.new(stats_queue)
+      aggregator = Aggregator.new(stats_queue, @context)
       aggregator.run
       aggregator.patterns
     end

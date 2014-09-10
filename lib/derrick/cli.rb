@@ -5,6 +5,15 @@ require 'byebug'
 
 module Derrick
   class CLI
+    class Context
+      attr_accessor :concurrency, :batch_size
+
+      def initialize
+        @concurrency = 4
+        @batch_size = 10_000
+      end
+    end
+
     class AggregateFormatter
       def initialize(aggregate)
         @aggregate = Hash[aggregate.sort_by { |p, a| -a.count }]
@@ -53,6 +62,7 @@ module Derrick
     end
 
     def initialize(args)
+      @context = Context.new
       @command, *@arguments = parser.parse(args)
     end
 
@@ -62,7 +72,7 @@ module Derrick
     end
 
     def command_inspect(database_url=nil)
-      inspector = Derrick::Inspector.new(Redis.new(url: database_url))
+      inspector = Derrick::Inspector.new(Redis.new(url: database_url), @context)
       aggregate = inspector.report
       AggregateFormatter.new(aggregate).each do |line|
         puts line
@@ -81,6 +91,14 @@ module Derrick
         opts.banner = "Inpect Redis databases to compute statistics on keys"
         opts.separator ""
         opts.separator "Usage: derrick inspect [options] DATABASE_URL"
+        opts.separator ""
+        opts.separator "Main options:"
+        opts.on('-c', '--concurrency CONCURRENCY') do |concurrency|
+          @context.concurrency = Integer(concurrency)
+        end
+        opts.on('-b', '--batch-size BATCH_SIZE') do |batch_size|
+          @context.batch_size = Integer(batch_size)
+        end
       end
     end
 
