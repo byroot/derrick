@@ -1,24 +1,34 @@
 # Derrick
 
-TODO: Write a gem description
+Inspect Redis databases and print statistics about the keys
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
-    gem 'derrick'
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
+```shell
     $ gem install derrick
+```
 
 ## Usage
 
-TODO: Write usage instructions here
+```shell
+$ derrick inspect redis://127.0.0.1:6379/5
+```
+
+It will print something like this:
+
+```
+Pattern                      Count  Exp Type
+shop:*:name                  10000 100% string
+shop:*:id                    10000   0% string
+shop:*:versions                  2   0% string: 50%,hash: 50%
+sorted_set:*:product_types       1   0% zset
+```
+
+You can also configure the concurrency level and batch size:
+
+```shell
+$ derrick inspect --concurrency 4 --batch-size 100000 redis://127.0.0.1:6379/5
+```
 
 ## Contributing
 
