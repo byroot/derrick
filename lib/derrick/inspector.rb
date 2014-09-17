@@ -152,7 +152,7 @@ module Derrick
     end
 
     def pattern_from(key)
-      canonical_key = key.name.gsub(/(^|:)(\d+|[0-9a-f]{32,40})($|:)/, '\1*\3')
+      canonical_key = key.name.inspect.gsub(/(^|:)(\d+|[0-9a-f]{32,40})($|:)/, '\1*\3')
       @patterns[canonical_key] ||= Pattern.new
     end
 
