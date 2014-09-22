@@ -28,12 +28,20 @@ describe Derrick::Pattern do
       expect('foo/42/bar').to match_pattern('foo/*/bar')
     end
 
-    it 'accepts `.` as segment separator' do
-      expect('foo.42.bar').to match_pattern('foo.*.bar')
-    end
+    context 'when no identifier is found' do
 
-    it 'accepts `-` as segment separator' do
-      expect('foo-42-bar').to match_pattern('foo-*-bar')
+      it 'assumes the first segment is shared' do
+        expect('foo:bar').to match_pattern('foo:*')
+      end
+
+      context 'and no segment serparator either' do
+
+        it 'falls in the `*` pattern' do
+          expect('foobar').to match_pattern('*')
+        end
+
+      end
+
     end
 
   end

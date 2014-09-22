@@ -41,11 +41,12 @@ module Derrick
     end
 
     class Context
-      attr_accessor :concurrency, :batch_size
+      attr_accessor :concurrency, :batch_size, :max_patterns
 
       def initialize
         @concurrency = 2
         @batch_size = 10_000
+        @max_patterns = 1_000
       end
     end
 
@@ -139,6 +140,9 @@ module Derrick
         end
         opts.on('-b', '--batch-size BATCH_SIZE') do |batch_size|
           @context.batch_size = Integer(batch_size)
+        end
+        opts.on('-C', '--max-patterns MAX_PATTERNS') do |max_patterns|
+          @context.max_patterns = Integer(max_patterns)
         end
       end
     end
