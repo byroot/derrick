@@ -1,8 +1,6 @@
 require 'optparse'
 require 'redis'
 
-require 'byebug'
-
 module Derrick
   class CLI
     class ProgressDisplay
